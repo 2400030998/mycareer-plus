@@ -7,6 +7,14 @@ function StudentDashboard({ onLogout }) {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState({})
   const [showProfile, setShowProfile] = useState(false)
+  const [showJoinClass, setShowJoinClass] = useState(false)
+  const [classCode, setClassCode] = useState('')
+  const [myClasses, setMyClasses] = useState([])
+  const [classTests, setClassTests] = useState([])
+  const [selectedClass, setSelectedClass] = useState(null)
+  const [selectedTest, setSelectedTest] = useState(null)
+  const [testAnswers, setTestAnswers] = useState({})
+  const [testResults, setTestResults] = useState({})
   const [userData, setUserData] = useState({
     name: '',
     email: '',
@@ -15,7 +23,8 @@ function StudentDashboard({ onLogout }) {
     dob: '',
     education: '',
     certificates: [],
-    joinDate: new Date().toLocaleDateString()
+    joinDate: new Date().toLocaleDateString(),
+    enrolledClasses: []
   })
   const [showCertificateUpload, setShowCertificateUpload] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -32,10 +41,101 @@ function StudentDashboard({ onLogout }) {
         ...prev,
         name: parsedUser.name || 'Student',
         email: parsedUser.email || '',
-        userType: parsedUser.userType || 'student'
+        userType: parsedUser.userType || 'student',
+        enrolledClasses: parsedUser.enrolledClasses || []
       }))
+      
+      // Load enrolled classes
+      loadMyClasses(parsedUser.enrolledClasses || [])
     }
   }, [])
+
+  const loadMyClasses = (enrolledIds) => {
+    const allClasses = JSON.parse(localStorage.getItem('classes') || '[]')
+    const userClasses = allClasses.filter(cls => enrolledIds.includes(cls.id))
+    setMyClasses(userClasses)
+  }
+
+  // Handle Join Class
+  const handleJoinClass = (e) => {
+    e.preventDefault()
+    const allClasses = JSON.parse(localStorage.getItem('classes') || '[]')
+    const classToJoin = allClasses.find(cls => cls.classCode === classCode.toUpperCase())
+
+    if (classToJoin) {
+      // Check if already enrolled
+      if (userData.enrolledClasses.includes(classToJoin.id)) {
+        alert('You are already enrolled in this class!')
+        return
+      }
+
+      // Update user's enrolled classes
+      const updatedEnrolled = [...userData.enrolledClasses, classToJoin.id]
+      const updatedUser = { ...userData, enrolledClasses: updatedEnrolled }
+      
+      // Update localStorage
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+      
+      // Update allUsers list
+      const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+      const updatedUsers = allUsers.map(u => 
+        u.email === userData.email ? { ...u, enrolledClasses: updatedEnrolled } : u
+      )
+      localStorage.setItem('allUsers', JSON.stringify(updatedUsers))
+      
+      setUserData(updatedUser)
+      loadMyClasses(updatedEnrolled)
+      setShowJoinClass(false)
+      setClassCode('')
+      alert('Successfully joined class! 🎉')
+    } else {
+      alert('Invalid class code! Please check and try again.')
+    }
+  }
+
+  // Load tests for selected class
+  const loadClassTests = (classId) => {
+    const allAssessments = JSON.parse(localStorage.getItem('assessments') || '[]')
+    const classTests = allAssessments.filter(test => test.classId === classId)
+    setClassTests(classTests)
+  }
+
+  // Handle Take Test
+  const handleTakeTest = (test) => {
+    setSelectedTest(test)
+    setTestAnswers({})
+    setCurrentQuestion(0)
+  }
+
+  // Handle Test Answer
+  const handleTestAnswer = (questionIndex, answer) => {
+    setTestAnswers({...testAnswers, [questionIndex]: answer})
+  }
+
+  // Handle Submit Test
+  const handleSubmitTest = () => {
+    // Calculate score
+    let correct = 0
+    const total = selectedTest.questions.length
+    
+    // For demo, random score
+    correct = Math.floor(Math.random() * (total + 1))
+    const percentage = Math.round((correct / total) * 100)
+    
+    const result = {
+      testId: selectedTest.id,
+      testTitle: selectedTest.title,
+      score: correct,
+      total: total,
+      percentage: percentage,
+      date: new Date().toLocaleDateString(),
+      answers: testAnswers
+    }
+    
+    setTestResults({...testResults, [selectedTest.id]: result})
+    setSelectedTest(null)
+    alert(`Test submitted! Your score: ${correct}/${total} (${percentage}%)`)
+  }
 
   // Sample assessments data
   const assessments = {
@@ -206,8 +306,7 @@ function StudentDashboard({ onLogout }) {
       modules: [
         { day: 1, title: 'Python Basics', completed: false, video: 'https://youtu.be/example25', resources: ['Python Guide'] },
         { day: 2, title: 'NumPy & Pandas', completed: false, video: 'https://youtu.be/example26', resources: ['NumPy Tutorial', 'Pandas Guide'] },
-        { day: 3, title: 'Data Visualization', completed: false, video: 'https://youtu.be/example27', resources: ['Matplotlib', 'Seaborn'] },
-        // ... similar 30 days structure
+        { day: 3, title: 'Data Visualization', completed: false, video: 'https://youtu.be/example27', resources: ['Matplotlib', 'Seaborn'] }
       ]
     },
     'digital-marketing': {
@@ -217,8 +316,7 @@ function StudentDashboard({ onLogout }) {
       description: 'Learn SEO, social media, and analytics',
       duration: '30 Days',
       modules: [
-        { day: 1, title: 'Marketing Fundamentals', completed: false, video: 'https://youtu.be/example28', resources: ['Marketing Guide'] },
-        // ... similar 30 days structure
+        { day: 1, title: 'Marketing Fundamentals', completed: false, video: 'https://youtu.be/example28', resources: ['Marketing Guide'] }
       ]
     }
   }
@@ -339,11 +437,11 @@ function StudentDashboard({ onLogout }) {
               <div className="welcome-stats">
                 <div className="stat-chip">
                   <i className="fas fa-trophy"></i>
-                  <span>3 Assessments Completed</span>
+                  <span>{myClasses.length} Classes Joined</span>
                 </div>
                 <div className="stat-chip">
                   <i className="fas fa-bullseye"></i>
-                  <span>85% Profile Complete</span>
+                  <span>{Object.keys(testResults).length} Tests Taken</span>
                 </div>
               </div>
             </div>
@@ -352,17 +450,19 @@ function StudentDashboard({ onLogout }) {
             <div className="quick-actions">
               <h3>Quick Actions</h3>
               <div className="action-grid">
+                <div className="action-card" onClick={() => setShowJoinClass(true)}>
+                  <i className="fas fa-door-open"></i>
+                  <span>Join Class</span>
+                  <small>Enter class code</small>
+                </div>
+                <div className="action-card" onClick={() => setActiveTab('myclasses')}>
+                  <i className="fas fa-school"></i>
+                  <span>My Classes</span>
+                  <small>{myClasses.length} classes</small>
+                </div>
                 <div className="action-card" onClick={() => setActiveTab('assessments')}>
                   <i className="fas fa-clipboard-list"></i>
                   <span>Take Assessment</span>
-                </div>
-                <div className="action-card" onClick={() => setActiveTab('results')}>
-                  <i className="fas fa-chart-pie"></i>
-                  <span>View Results</span>
-                </div>
-                <div className="action-card" onClick={() => setActiveTab('careers')}>
-                  <i className="fas fa-briefcase"></i>
-                  <span>Explore Careers</span>
                 </div>
                 <div className="action-card" onClick={() => setShowCounseling(true)}>
                   <i className="fas fa-calendar-alt"></i>
@@ -370,6 +470,30 @@ function StudentDashboard({ onLogout }) {
                 </div>
               </div>
             </div>
+
+            {/* My Classes Preview */}
+            {myClasses.length > 0 && (
+              <div className="preview-section">
+                <div className="section-header">
+                  <h3>My Classes</h3>
+                  <button className="view-all" onClick={() => setActiveTab('myclasses')}>
+                    View All <i className="fas fa-arrow-right"></i>
+                  </button>
+                </div>
+                <div className="classes-preview-grid">
+                  {myClasses.slice(0, 3).map(cls => (
+                    <div key={cls.id} className="class-preview-card">
+                      <div className="class-preview-header">
+                        <i className="fas fa-school" style={{color: '#6366f1'}}></i>
+                        <span className="class-code-tag">{cls.classCode}</span>
+                      </div>
+                      <h4>{cls.className}</h4>
+                      <p>{cls.subject} - {cls.section}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Recommended Careers Preview */}
             <div className="preview-section">
@@ -421,6 +545,79 @@ function StudentDashboard({ onLogout }) {
                 </div>
               </div>
             </div>
+          </div>
+        )
+
+      case 'myclasses':
+        return (
+          <div className="myclasses-page">
+            <div className="page-header">
+              <h2>My Classes</h2>
+              <button className="join-class-btn" onClick={() => setShowJoinClass(true)}>
+                <i className="fas fa-plus"></i> Join New Class
+              </button>
+            </div>
+
+            {myClasses.length > 0 ? (
+              <div className="classes-grid">
+                {myClasses.map(cls => {
+                  // Load tests for this class
+                  const allAssessments = JSON.parse(localStorage.getItem('assessments') || '[]')
+                  const classTests = allAssessments.filter(test => test.classId === cls.id)
+                  
+                  return (
+                    <div key={cls.id} className="class-card">
+                      <div className="class-header">
+                        <div>
+                          <span className="class-code">{cls.classCode}</span>
+                          <h3>{cls.className}</h3>
+                        </div>
+                      </div>
+                      <p className="class-desc">{cls.subject} - Section {cls.section}</p>
+                      <div className="class-meta">
+                        <span><i className="fas fa-calendar"></i> {cls.academicYear}</span>
+                      </div>
+                      
+                      {/* Class Tests */}
+                      <div className="class-tests">
+                        <h4>Available Tests</h4>
+                        {classTests.length > 0 ? (
+                          classTests.map(test => (
+                            <div key={test.id} className="test-item">
+                              <div className="test-info">
+                                <h5>{test.title}</h5>
+                                <span className="test-duration">{test.duration} mins</span>
+                              </div>
+                              {testResults[test.id] ? (
+                                <div className="test-completed">
+                                  <span className="score-badge">{testResults[test.id].percentage}%</span>
+                                  <small>Completed</small>
+                                </div>
+                              ) : (
+                                <button 
+                                  className="take-test-btn"
+                                  onClick={() => handleTakeTest(test)}
+                                >
+                                  Take Test
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="no-tests">No tests available yet</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="no-classes">
+                <i className="fas fa-school"></i>
+                <h3>No Classes Joined</h3>
+                <p>Click "Join New Class" and enter your class code to get started!</p>
+              </div>
+            )}
           </div>
         )
 
@@ -548,6 +745,25 @@ function StudentDashboard({ onLogout }) {
               </div>
             </div>
 
+            {/* Test Results */}
+            {Object.keys(testResults).length > 0 && (
+              <div className="test-results-section">
+                <h3>Class Test Results</h3>
+                <div className="test-results-grid">
+                  {Object.values(testResults).map((result, idx) => (
+                    <div key={idx} className="test-result-card">
+                      <h4>{result.testTitle}</h4>
+                      <div className="score-circle">
+                        <span className="score">{result.percentage}%</span>
+                      </div>
+                      <p>Score: {result.score}/{result.total}</p>
+                      <small>Completed: {result.date}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="recommendation-box">
               <h3>Next Steps</h3>
               <p>Based on your results, we recommend exploring careers in technology and design.</p>
@@ -616,6 +832,89 @@ function StudentDashboard({ onLogout }) {
 
   return (
     <div className="dashboard">
+      {/* Join Class Modal */}
+      {showJoinClass && (
+        <div className="modal">
+          <div className="modal-content">
+            <span className="close" onClick={() => setShowJoinClass(false)}>&times;</span>
+            <div className="modal-header">
+              <i className="fas fa-door-open modal-logo"></i>
+              <h2>Join a Class</h2>
+              <p>Enter the 6-digit class code provided by your teacher</p>
+            </div>
+            <form onSubmit={handleJoinClass}>
+              <div className="form-group">
+                <label><i className="fas fa-key"></i> Class Code</label>
+                <input 
+                  type="text" 
+                  value={classCode}
+                  onChange={(e) => setClassCode(e.target.value.toUpperCase())}
+                  placeholder="e.g., ABC123"
+                  maxLength="6"
+                  required
+                  className="class-code-input"
+                />
+              </div>
+              <button type="submit" className="btn-submit">
+                Join Class <i className="fas fa-arrow-right"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Take Test Modal */}
+      {selectedTest && (
+        <div className="modal test-modal">
+          <div className="modal-content test-content">
+            <span className="close" onClick={() => setSelectedTest(null)}>&times;</span>
+            <div className="test-header">
+              <h2>{selectedTest.title}</h2>
+              <span className="test-progress">Question {currentQuestion + 1}/{selectedTest.questions.length}</span>
+            </div>
+            
+            <div className="test-progress-bar">
+              <div className="progress-fill" style={{
+                width: `${((currentQuestion + 1) / selectedTest.questions.length) * 100}%`
+              }}></div>
+            </div>
+
+            <div className="test-question">
+              <h3>{selectedTest.questions[currentQuestion]}</h3>
+              
+              <div className="test-options">
+                {['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'].map((option, idx) => (
+                  <button
+                    key={idx}
+                    className={`test-option ${testAnswers[currentQuestion] === option ? 'selected' : ''}`}
+                    onClick={() => handleTestAnswer(currentQuestion, option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="test-footer">
+              <button 
+                className="next-test-btn"
+                onClick={() => {
+                  if (currentQuestion < selectedTest.questions.length - 1) {
+                    setCurrentQuestion(currentQuestion + 1)
+                  } else {
+                    handleSubmitTest()
+                  }
+                }}
+                disabled={!testAnswers[currentQuestion]}
+              >
+                {currentQuestion === selectedTest.questions.length - 1 ? 'Submit Test' : 'Next Question'}
+                <i className="fas fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Profile Modal */}
       {showProfile && (
         <div className="profile-modal">
@@ -861,6 +1160,14 @@ function StudentDashboard({ onLogout }) {
             onClick={(e) => { e.preventDefault(); setActiveTab('dashboard') }}
           >
             <i className="fas fa-home"></i> Dashboard
+          </a>
+          <a 
+            href="#" 
+            className={activeTab === 'myclasses' ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); setActiveTab('myclasses') }}
+          >
+            <i className="fas fa-school"></i> My Classes
+            {myClasses.length > 0 && <span className="nav-badge">{myClasses.length}</span>}
           </a>
           <a 
             href="#" 

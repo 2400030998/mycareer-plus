@@ -7,33 +7,50 @@ function AdminDashboard({ onLogout }) {
   const [pendingAdmins, setPendingAdmins] = useState([])
   const [assessments, setAssessments] = useState([])
   const [supportTickets, setSupportTickets] = useState([])
+  const [classes, setClasses] = useState([])
   const [showAddUser, setShowAddUser] = useState(false)
   const [showAddAssessment, setShowAddAssessment] = useState(false)
+  const [showCreateClass, setShowCreateClass] = useState(false)
   const [showTicketReply, setShowTicketReply] = useState(null)
+  const [selectedIdCard, setSelectedIdCard] = useState(null)
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    userType: 'student',
-    status: 'active',
     password: '',
     phone: '',
-    department: ''
+    userType: 'student',
+    status: 'active'
   })
   const [newAssessment, setNewAssessment] = useState({
     title: '',
     type: 'career',
     questions: '',
-    duration: 10
+    duration: 10,
+    classId: ''
+  })
+  const [newClass, setNewClass] = useState({
+    className: '',
+    classCode: generateClassCode(),
+    subject: '',
+    section: '',
+    academicYear: new Date().getFullYear().toString(),
+    description: ''
   })
   const [replyMessage, setReplyMessage] = useState('')
 
-  // Load all data from localStorage
-  useEffect(() => {
-    loadData()
-  }, [])
+  // Generate unique class code
+  function generateClassCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    let code = ''
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return code
+  }
 
+  // Load all data from localStorage
   const loadData = () => {
-    // Load regular users (students)
+    // Load all users
     const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
     setUsers(allUsers.filter(u => u.userType === 'student'))
 
@@ -48,146 +65,174 @@ function AdminDashboard({ onLogout }) {
     // Load support tickets
     const tickets = JSON.parse(localStorage.getItem('supportTickets') || '[]')
     setSupportTickets(tickets)
+
+    // Load classes
+    const allClasses = JSON.parse(localStorage.getItem('classes') || '[]')
+    setClasses(allClasses)
   }
+
+  useEffect(() => {
+    loadData()
+    window.addEventListener('storage', loadData)
+    return () => window.removeEventListener('storage', loadData)
+  }, [])
 
   // Handle admin approval
   const handleApproveAdmin = (adminRequest) => {
-    // Add to users list as admin
+    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+    
     const newAdmin = {
       ...adminRequest,
       id: Date.now(),
       status: 'active',
-      approvedBy: 'Admin',
-      approvedDate: new Date().toLocaleDateString()
+      approvedBy: 'Super Admin',
+      approvedDate: new Date().toLocaleDateString(),
+      userType: 'admin'
     }
     
-    const updatedUsers = [...users, newAdmin]
-    setUsers(updatedUsers)
-    localStorage.setItem('allUsers', JSON.stringify(updatedUsers))
+    allUsers.push(newAdmin)
+    localStorage.setItem('allUsers', JSON.stringify(allUsers))
 
-    // Remove from pending
     const updatedPending = pendingAdmins.filter(p => p.email !== adminRequest.email)
-    setPendingAdmins(updatedPending)
     localStorage.setItem('pendingAdmins', JSON.stringify(updatedPending))
-
-    // Send notification to admin (store in notifications)
-    const notification = {
-      id: Date.now(),
-      email: adminRequest.email,
-      message: 'Your admin request has been approved! You can now login as admin.',
-      date: new Date().toLocaleDateString(),
-      read: false
-    }
-    const notifications = JSON.parse(localStorage.getItem('notifications') || '[]')
-    notifications.push(notification)
-    localStorage.setItem('notifications', JSON.stringify(notifications))
-
-    alert(`Admin request approved for ${adminRequest.name}`)
+    
+    setPendingAdmins(updatedPending)
+    setUsers(allUsers.filter(u => u.userType === 'student'))
+    
+    alert(`✅ Admin request approved for ${adminRequest.name}`)
   }
 
   // Handle admin rejection
   const handleRejectAdmin = (adminRequest) => {
     if (window.confirm(`Reject admin request for ${adminRequest.name}?`)) {
       const updatedPending = pendingAdmins.filter(p => p.email !== adminRequest.email)
-      setPendingAdmins(updatedPending)
       localStorage.setItem('pendingAdmins', JSON.stringify(updatedPending))
-
-      // Send rejection notification
-      const notification = {
-        id: Date.now(),
-        email: adminRequest.email,
-        message: 'Your admin request has been rejected. Please contact support for more information.',
-        date: new Date().toLocaleDateString(),
-        read: false
-      }
-      const notifications = JSON.parse(localStorage.getItem('notifications') || '[]')
-      notifications.push(notification)
-      localStorage.setItem('notifications', JSON.stringify(notifications))
-
-      alert('Admin request rejected')
+      setPendingAdmins(updatedPending)
+      alert(`❌ Admin request rejected for ${adminRequest.name}`)
     }
   }
 
   // Handle delete user
   const handleDeleteUser = (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
-      const updatedUsers = users.filter(user => user.id !== userId)
-      setUsers(updatedUsers)
+      const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+      const updatedUsers = allUsers.filter(user => user.id !== userId)
       localStorage.setItem('allUsers', JSON.stringify(updatedUsers))
+      setUsers(updatedUsers.filter(u => u.userType === 'student'))
       alert('User deleted successfully!')
     }
   }
 
   // Handle toggle user status
   const handleToggleUserStatus = (userId) => {
-    const updatedUsers = users.map(user => 
-      user.id === userId ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' } : user
-    )
-    setUsers(updatedUsers)
+    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+    const updatedUsers = allUsers.map(user => {
+      if (user.id === userId) {
+        return { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
+      }
+      return user
+    })
     localStorage.setItem('allUsers', JSON.stringify(updatedUsers))
+    setUsers(updatedUsers.filter(u => u.userType === 'student'))
   }
 
   // Handle add user
   const handleAddUser = (e) => {
     e.preventDefault()
-    const updatedUsers = [...users, { 
-      ...newUser, 
-      id: Date.now(), 
+    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+    
+    const newStudent = {
+      ...newUser,
+      id: Date.now(),
       joinDate: new Date().toLocaleDateString(),
-      createdBy: 'Admin'
-    }]
-    setUsers(updatedUsers)
-    localStorage.setItem('allUsers', JSON.stringify(updatedUsers))
+      certificates: [],
+      education: '',
+      enrolledClasses: []
+    }
+    
+    allUsers.push(newStudent)
+    localStorage.setItem('allUsers', JSON.stringify(allUsers))
+    setUsers(allUsers.filter(u => u.userType === 'student'))
     setShowAddUser(false)
-    setNewUser({ name: '', email: '', userType: 'student', status: 'active', password: '', phone: '', department: '' })
-    alert('User added successfully!')
+    setNewUser({ name: '', email: '', password: '', phone: '', userType: 'student', status: 'active' })
+    alert('Student added successfully!')
+  }
+
+  // Handle create class
+  const handleCreateClass = (e) => {
+    e.preventDefault()
+    const allClasses = JSON.parse(localStorage.getItem('classes') || '[]')
+    
+    const newClassData = {
+      ...newClass,
+      id: Date.now(),
+      createdAt: new Date().toLocaleDateString(),
+      createdBy: 'Admin',
+      students: [],
+      assessments: [],
+      classCode: generateClassCode()
+    }
+    
+    allClasses.push(newClassData)
+    localStorage.setItem('classes', JSON.stringify(allClasses))
+    setClasses(allClasses)
+    setShowCreateClass(false)
+    setNewClass({
+      className: '',
+      classCode: generateClassCode(),
+      subject: '',
+      section: '',
+      academicYear: new Date().getFullYear().toString(),
+      description: ''
+    })
+    alert('Class created successfully! Class Code: ' + newClassData.classCode)
   }
 
   // Handle add assessment
   const handleAddAssessment = (e) => {
     e.preventDefault()
     const questionsArray = newAssessment.questions.split('\n').filter(q => q.trim() !== '')
-    const updatedAssessments = [...assessments, { 
-      ...newAssessment, 
+    const allAssessments = JSON.parse(localStorage.getItem('assessments') || '[]')
+    
+    const newAssess = {
+      ...newAssessment,
       questions: questionsArray,
-      id: Date.now(), 
+      id: Date.now(),
       created: new Date().toLocaleDateString(),
-      createdBy: 'Admin'
-    }]
-    setAssessments(updatedAssessments)
-    localStorage.setItem('assessments', JSON.stringify(updatedAssessments))
+      submissions: []
+    }
+    
+    allAssessments.push(newAssess)
+    localStorage.setItem('assessments', JSON.stringify(allAssessments))
+    setAssessments(allAssessments)
     setShowAddAssessment(false)
-    setNewAssessment({ title: '', type: 'career', questions: '', duration: 10 })
-    alert('Assessment added successfully!')
+    setNewAssessment({ title: '', type: 'career', questions: '', duration: 10, classId: '' })
+    alert('Assessment created successfully!')
+  }
+
+  // Handle delete class
+  const handleDeleteClass = (classId) => {
+    if (window.confirm('Delete this class? All associated data will be lost.')) {
+      const allClasses = classes.filter(c => c.id !== classId)
+      localStorage.setItem('classes', JSON.stringify(allClasses))
+      setClasses(allClasses)
+      alert('Class deleted!')
+    }
   }
 
   // Handle reply to support ticket
   const handleReplyTicket = (ticketId) => {
-    const updatedTickets = supportTickets.map(ticket => 
+    const tickets = JSON.parse(localStorage.getItem('supportTickets') || '[]')
+    const updatedTickets = tickets.map(ticket => 
       ticket.id === ticketId ? { 
         ...ticket, 
         status: 'resolved',
         reply: replyMessage,
-        repliedDate: new Date().toLocaleDateString(),
-        repliedBy: 'Admin'
+        repliedDate: new Date().toLocaleDateString()
       } : ticket
     )
-    setSupportTickets(updatedTickets)
     localStorage.setItem('supportTickets', JSON.stringify(updatedTickets))
-    
-    // Notify user
-    const ticket = supportTickets.find(t => t.id === ticketId)
-    const notification = {
-      id: Date.now(),
-      email: ticket.email,
-      message: `Your support ticket has been resolved. Reply: ${replyMessage}`,
-      date: new Date().toLocaleDateString(),
-      read: false
-    }
-    const notifications = JSON.parse(localStorage.getItem('notifications') || '[]')
-    notifications.push(notification)
-    localStorage.setItem('notifications', JSON.stringify(notifications))
-
+    setSupportTickets(updatedTickets)
     setShowTicketReply(null)
     setReplyMessage('')
     alert('Reply sent successfully!')
@@ -195,20 +240,19 @@ function AdminDashboard({ onLogout }) {
 
   // Calculate statistics
   const getStats = () => {
-    const totalStudents = users.length
-    const activeStudents = users.filter(u => u.status === 'active').length
-    const pendingRequests = pendingAdmins.length
+    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]')
+    const students = allUsers.filter(u => u.userType === 'student')
+    const activeStudents = students.filter(u => u.status === 'active').length
+    const pendingCount = pendingAdmins.length
     const openTickets = supportTickets.filter(t => t.status === 'open').length
-    const totalAssessments = assessments.length
-    const totalTestsTaken = parseInt(localStorage.getItem('totalTestsTaken') || '0')
 
     return {
-      totalStudents,
+      totalStudents: students.length,
       activeStudents,
-      pendingRequests,
+      pendingRequests: pendingCount,
       openTickets,
-      totalAssessments,
-      totalTestsTaken
+      totalAssessments: assessments.length,
+      totalClasses: classes.length
     }
   }
 
@@ -232,25 +276,23 @@ function AdminDashboard({ onLogout }) {
                 </div>
               </div>
               <div className="stat-card">
-                <i className="fas fa-user-clock"></i>
+                <i className="fas fa-school"></i>
                 <div>
-                  <h3>Pending Admin Requests</h3>
-                  <p>{stats.pendingRequests}</p>
-                  {stats.pendingRequests > 0 && (
-                    <button className="stat-action" onClick={() => setActiveTab('pending-admins')}>
-                      Review Now →
-                    </button>
-                  )}
+                  <h3>Active Classes</h3>
+                  <p>{stats.totalClasses}</p>
+                  <button className="stat-action" onClick={() => setActiveTab('classes')}>
+                    Manage →
+                  </button>
                 </div>
               </div>
               <div className="stat-card">
-                <i className="fas fa-ticket-alt"></i>
+                <i className="fas fa-user-clock"></i>
                 <div>
-                  <h3>Support Tickets</h3>
-                  <p>{stats.openTickets}</p>
-                  {stats.openTickets > 0 && (
-                    <button className="stat-action" onClick={() => setActiveTab('support')}>
-                      View Open →
+                  <h3>Pending Admins</h3>
+                  <p>{stats.pendingRequests}</p>
+                  {stats.pendingRequests > 0 && (
+                    <button className="stat-action" onClick={() => setActiveTab('pending-admins')}>
+                      Review →
                     </button>
                   )}
                 </div>
@@ -258,9 +300,8 @@ function AdminDashboard({ onLogout }) {
               <div className="stat-card">
                 <i className="fas fa-clipboard-list"></i>
                 <div>
-                  <h3>Total Assessments</h3>
+                  <h3>Assessments</h3>
                   <p>{stats.totalAssessments}</p>
-                  <small>{stats.totalTestsTaken} tests taken</small>
                 </div>
               </div>
             </div>
@@ -269,83 +310,108 @@ function AdminDashboard({ onLogout }) {
             <div className="quick-actions">
               <h3>Quick Actions</h3>
               <div className="action-grid">
+                <div className="action-card" onClick={() => setShowCreateClass(true)}>
+                  <i className="fas fa-plus-circle"></i>
+                  <span>Create Class</span>
+                  <small>Generate class code</small>
+                </div>
+                <div className="action-card" onClick={() => setShowAddAssessment(true)}>
+                  <i className="fas fa-pen"></i>
+                  <span>Create Test</span>
+                  <small>Add to class</small>
+                </div>
                 <div className="action-card" onClick={() => setShowAddUser(true)}>
                   <i className="fas fa-user-plus"></i>
                   <span>Add Student</span>
                 </div>
-                <div className="action-card" onClick={() => setShowAddAssessment(true)}>
-                  <i className="fas fa-plus-circle"></i>
-                  <span>Create Assessment</span>
-                </div>
-                <div className="action-card" onClick={() => {
-                  const report = generateReport()
-                  alert('Report generated! Check downloads folder.')
-                }}>
-                  <i className="fas fa-file-export"></i>
-                  <span>Export Report</span>
-                </div>
-                <div className="action-card" onClick={() => setActiveTab('settings')}>
-                  <i className="fas fa-cog"></i>
-                  <span>Settings</span>
+                <div className="action-card" onClick={() => setActiveTab('classes')}>
+                  <i className="fas fa-school"></i>
+                  <span>View Classes</span>
                 </div>
               </div>
             </div>
 
-            {/* Pending Admin Requests Preview */}
-            {pendingAdmins.length > 0 && (
-              <div className="pending-section">
-                <h3>Pending Admin Requests</h3>
-                <div className="pending-list">
-                  {pendingAdmins.slice(0, 3).map(admin => (
-                    <div key={admin.email} className="pending-item">
-                      <img src={`https://ui-avatars.com/api/?name=${admin.name}&background=6366f1&color=fff`} alt={admin.name} />
-                      <div className="pending-info">
-                        <h4>{admin.name}</h4>
-                        <p>{admin.email}</p>
-                        <small>Department: {admin.department || 'Not specified'}</small>
+            {/* Recent Classes */}
+            {classes.length > 0 && (
+              <div className="recent-section">
+                <h3>Recent Classes</h3>
+                <div className="classes-grid">
+                  {classes.slice(0, 3).map(cls => (
+                    <div key={cls.id} className="class-card">
+                      <div className="class-header">
+                        <i className="fas fa-school"></i>
+                        <span className="class-code">{cls.classCode}</span>
                       </div>
-                      <div className="pending-actions">
-                        <button className="approve-btn" onClick={() => handleApproveAdmin(admin)}>
-                          <i className="fas fa-check"></i>
-                        </button>
-                        <button className="reject-btn" onClick={() => handleRejectAdmin(admin)}>
-                          <i className="fas fa-times"></i>
-                        </button>
+                      <h4>{cls.className}</h4>
+                      <p>{cls.subject} - {cls.section}</p>
+                      <div className="class-stats">
+                        <span><i className="fas fa-users"></i> {cls.students?.length || 0} students</span>
+                        <span><i className="fas fa-pen"></i> {cls.assessments?.length || 0} tests</span>
                       </div>
                     </div>
                   ))}
                 </div>
-                {pendingAdmins.length > 3 && (
-                  <button className="view-all" onClick={() => setActiveTab('pending-admins')}>
-                    View All ({pendingAdmins.length}) →
-                  </button>
-                )}
               </div>
             )}
+          </div>
+        )
 
-            {/* Recent Support Tickets */}
-            {supportTickets.filter(t => t.status === 'open').length > 0 && (
-              <div className="recent-tickets">
-                <h3>Open Support Tickets</h3>
-                <div className="tickets-list">
-                  {supportTickets.filter(t => t.status === 'open').slice(0, 3).map(ticket => (
-                    <div key={ticket.id} className="ticket-item">
-                      <div className="ticket-header">
-                        <h4>{ticket.subject}</h4>
-                        <span className="priority-badge">{ticket.priority}</span>
-                      </div>
-                      <p>{ticket.message.substring(0, 100)}...</p>
-                      <div className="ticket-footer">
-                        <span>From: {ticket.name}</span>
-                        <button className="reply-btn" onClick={() => setShowTicketReply(ticket.id)}>
-                          Reply
-                        </button>
-                      </div>
+      case 'classes':
+        return (
+          <div className="classes-page">
+            <div className="page-header">
+              <h2>Manage Classes</h2>
+              <button className="add-btn" onClick={() => setShowCreateClass(true)}>
+                <i className="fas fa-plus"></i> Create Class
+              </button>
+            </div>
+
+            <div className="classes-grid full">
+              {classes.map(cls => (
+                <div key={cls.id} className="class-card large">
+                  <div className="class-header">
+                    <div>
+                      <span className="class-code-badge">{cls.classCode}</span>
+                      <h3>{cls.className}</h3>
                     </div>
-                  ))}
+                    <button className="delete-btn" onClick={() => handleDeleteClass(cls.id)}>
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  </div>
+                  <p className="class-desc">{cls.description || 'No description'}</p>
+                  <div className="class-details">
+                    <span><i className="fas fa-book"></i> {cls.subject}</span>
+                    <span><i className="fas fa-users"></i> Section {cls.section}</span>
+                    <span><i className="fas fa-calendar"></i> {cls.academicYear}</span>
+                  </div>
+                  <div className="class-stats-box">
+                    <div className="stat">
+                      <span className="number">{cls.students?.length || 0}</span>
+                      <span>Students</span>
+                    </div>
+                    <div className="stat">
+                      <span className="number">{cls.assessments?.length || 0}</span>
+                      <span>Tests</span>
+                    </div>
+                    <div className="stat">
+                      <span className="number">{cls.assessments?.filter(t => t.submitted)?.length || 0}</span>
+                      <span>Submissions</span>
+                    </div>
+                  </div>
+                  <div className="class-actions">
+                    <button className="view-btn">
+                      <i className="fas fa-eye"></i> View
+                    </button>
+                    <button className="copy-btn" onClick={() => {
+                      navigator.clipboard.writeText(cls.classCode)
+                      alert('Class code copied!')
+                    }}>
+                      <i className="fas fa-copy"></i> Copy Code
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )
 
@@ -357,8 +423,8 @@ function AdminDashboard({ onLogout }) {
 
             {pendingAdmins.length > 0 ? (
               <div className="pending-grid">
-                {pendingAdmins.map(admin => (
-                  <div key={admin.email} className="pending-card">
+                {pendingAdmins.map((admin, index) => (
+                  <div key={index} className="pending-card">
                     <div className="card-header">
                       <img src={`https://ui-avatars.com/api/?name=${admin.name}&background=6366f1&color=fff&size=64`} alt={admin.name} />
                       <div>
@@ -369,8 +435,19 @@ function AdminDashboard({ onLogout }) {
                     <div className="card-body">
                       <p><strong>Department:</strong> {admin.department || 'Not specified'}</p>
                       <p><strong>Phone:</strong> {admin.phone || 'Not provided'}</p>
-                      <p><strong>Requested on:</strong> {admin.requestDate}</p>
+                      <p><strong>Requested:</strong> {admin.requestDate || admin.joinDate}</p>
                       <p><strong>Reason:</strong> {admin.reason || 'Wants to become admin'}</p>
+                      {admin.idCard && (
+                        <div className="id-card-section">
+                          <strong>ID Card:</strong>
+                          <button 
+                            className="view-id-btn" 
+                            onClick={() => setSelectedIdCard(admin.idCard)}
+                          >
+                            <i className="fas fa-id-card"></i> View ID Card
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div className="card-footer">
                       <button className="approve-btn" onClick={() => handleApproveAdmin(admin)}>
@@ -384,50 +461,11 @@ function AdminDashboard({ onLogout }) {
                 ))}
               </div>
             ) : (
-              <p className="no-data">No pending admin requests</p>
+              <div className="no-data">
+                <i className="fas fa-check-circle"></i>
+                <p>No pending admin requests</p>
+              </div>
             )}
-          </div>
-        )
-
-      case 'support':
-        return (
-          <div className="support-page">
-            <h2>Support Tickets</h2>
-            <div className="ticket-filters">
-              <button className="filter-btn active">All</button>
-              <button className="filter-btn">Open</button>
-              <button className="filter-btn">Resolved</button>
-              <button className="filter-btn">High Priority</button>
-            </div>
-
-            <div className="tickets-grid">
-              {supportTickets.map(ticket => (
-                <div key={ticket.id} className={`ticket-card ${ticket.priority}`}>
-                  <div className="ticket-status">
-                    <span className={`status-${ticket.status}`}>{ticket.status}</span>
-                    <span className={`priority-${ticket.priority}`}>{ticket.priority}</span>
-                  </div>
-                  <h3>{ticket.subject}</h3>
-                  <p>{ticket.message}</p>
-                  <div className="ticket-meta">
-                    <span><i className="fas fa-user"></i> {ticket.name}</span>
-                    <span><i className="fas fa-calendar"></i> {ticket.date}</span>
-                  </div>
-                  {ticket.status === 'open' && (
-                    <button className="reply-ticket-btn" onClick={() => setShowTicketReply(ticket.id)}>
-                      <i className="fas fa-reply"></i> Reply
-                    </button>
-                  )}
-                  {ticket.reply && (
-                    <div className="ticket-reply">
-                      <strong>Admin Reply:</strong>
-                      <p>{ticket.reply}</p>
-                      <small>{ticket.repliedDate}</small>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
         )
 
@@ -451,8 +489,8 @@ function AdminDashboard({ onLogout }) {
                 <strong>{stats.activeStudents}</strong>
               </div>
               <div className="user-stat">
-                <span>Inactive</span>
-                <strong>{stats.totalStudents - stats.activeStudents}</strong>
+                <span>In Classes</span>
+                <strong>{users.filter(u => u.enrolledClasses?.length > 0).length}</strong>
               </div>
             </div>
 
@@ -461,9 +499,9 @@ function AdminDashboard({ onLogout }) {
                 <tr>
                   <th>Student</th>
                   <th>Contact</th>
+                  <th>Classes</th>
                   <th>Status</th>
                   <th>Joined</th>
-                  <th>Last Active</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -475,13 +513,15 @@ function AdminDashboard({ onLogout }) {
                         <img src={`https://ui-avatars.com/api/?name=${user.name}&background=6366f1&color=fff`} alt={user.name} />
                         <div>
                           <strong>{user.name}</strong>
-                          <small>ID: {user.id}</small>
                         </div>
                       </div>
                     </td>
                     <td>
                       <div>{user.email}</div>
                       <small>{user.phone || 'No phone'}</small>
+                    </td>
+                    <td>
+                      <span className="class-count">{user.enrolledClasses?.length || 0} classes</span>
                     </td>
                     <td>
                       <button 
@@ -492,11 +532,7 @@ function AdminDashboard({ onLogout }) {
                       </button>
                     </td>
                     <td>{user.joinDate}</td>
-                    <td>{user.lastActive || 'Never'}</td>
                     <td>
-                      <button className="action-btn edit" title="Edit">
-                        <i className="fas fa-edit"></i>
-                      </button>
                       <button className="action-btn delete" title="Delete" onClick={() => handleDeleteUser(user.id)}>
                         <i className="fas fa-trash"></i>
                       </button>
@@ -508,124 +544,91 @@ function AdminDashboard({ onLogout }) {
           </div>
         )
 
-      case 'manage-tests':
-        return (
-          <div className="manage-tests">
-            <div className="page-header">
-              <h2>Manage Assessments</h2>
-              <button className="add-btn" onClick={() => setShowAddAssessment(true)}>
-                <i className="fas fa-plus"></i> New Assessment
-              </button>
-            </div>
-
-            <div className="assessments-grid">
-              {assessments.map(assessment => (
-                <div key={assessment.id} className="assessment-card">
-                  <div className="assessment-type">{assessment.type}</div>
-                  <h3>{assessment.title}</h3>
-                  <p>{assessment.questions?.length || 0} questions • {assessment.duration} mins</p>
-                  <div className="assessment-stats">
-                    <span><i className="fas fa-users"></i> 23 taken</span>
-                    <span><i className="fas fa-chart-line"></i> 85% avg</span>
-                  </div>
-                  <div className="assessment-actions">
-                    <button className="edit-btn"><i className="fas fa-edit"></i> Edit</button>
-                    <button className="delete-btn"><i className="fas fa-trash"></i></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-
-      case 'reports':
-        return (
-          <div className="reports-page">
-            <h2>Analytics & Reports</h2>
-            
-            <div className="report-filters">
-              <select className="report-select">
-                <option>Last 7 days</option>
-                <option>Last 30 days</option>
-                <option>Last 3 months</option>
-                <option>This year</option>
-              </select>
-              <button className="export-report-btn">
-                <i className="fas fa-download"></i> Export Report
-              </button>
-            </div>
-
-            <div className="reports-grid">
-              <div className="report-card">
-                <h3>User Growth</h3>
-                <div className="chart-placeholder">
-                  <i className="fas fa-chart-line"></i>
-                  <div className="chart-data">
-                    <p>Total Users: {stats.totalStudents}</p>
-                    <p>New this week: +12</p>
-                    <p>Growth rate: +15%</p>
-                  </div>
-                </div>
-              </div>
-              <div className="report-card">
-                <h3>Assessment Completion</h3>
-                <div className="chart-placeholder">
-                  <i className="fas fa-chart-pie"></i>
-                  <div className="chart-data">
-                    <p>Completed: 156</p>
-                    <p>In Progress: 45</p>
-                    <p>Not Started: 89</p>
-                  </div>
-                </div>
-              </div>
-              <div className="report-card">
-                <h3>Popular Careers</h3>
-                <div className="chart-placeholder">
-                  <i className="fas fa-chart-bar"></i>
-                  <div className="chart-data">
-                    <p>Software Dev: 45%</p>
-                    <p>Data Science: 30%</p>
-                    <p>UX Design: 25%</p>
-                  </div>
-                </div>
-              </div>
-              <div className="report-card">
-                <h3>Support Tickets</h3>
-                <div className="chart-placeholder">
-                  <i className="fas fa-ticket-alt"></i>
-                  <div className="chart-data">
-                    <p>Open: {stats.openTickets}</p>
-                    <p>Resolved: 234</p>
-                    <p>Avg response: 2h</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-
       default:
         return null
     }
   }
 
-  // Helper function to generate report
-  const generateReport = () => {
-    const report = {
-      generated: new Date().toLocaleString(),
-      totalStudents: stats.totalStudents,
-      activeStudents: stats.activeStudents,
-      pendingAdmins: stats.pendingRequests,
-      totalAssessments: stats.totalAssessments,
-      supportTickets: stats.openTickets,
-      users: users
-    }
-    console.log('Report generated:', report)
-    return report
-  }
-
   return (
     <div className="dashboard admin-dashboard">
+      {/* ID Card Modal */}
+      {selectedIdCard && (
+        <div className="modal" onClick={() => setSelectedIdCard(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <span className="close" onClick={() => setSelectedIdCard(null)}>&times;</span>
+            <h3>ID Card</h3>
+            <img src={selectedIdCard} alt="ID Card" style={{width: '100%', maxHeight: '500px', objectFit: 'contain'}} />
+          </div>
+        </div>
+      )}
+
+      {/* Create Class Modal */}
+      {showCreateClass && (
+        <div className="modal">
+          <div className="modal-content">
+            <span className="close" onClick={() => setShowCreateClass(false)}>&times;</span>
+            <h2>Create New Class</h2>
+            <form onSubmit={handleCreateClass}>
+              <div className="form-group">
+                <label>Class Name</label>
+                <input 
+                  type="text" 
+                  value={newClass.className}
+                  onChange={(e) => setNewClass({...newClass, className: e.target.value})}
+                  placeholder="e.g., Computer Science 101"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Subject</label>
+                <input 
+                  type="text" 
+                  value={newClass.subject}
+                  onChange={(e) => setNewClass({...newClass, subject: e.target.value})}
+                  placeholder="e.g., Web Development"
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Section</label>
+                  <input 
+                    type="text" 
+                    value={newClass.section}
+                    onChange={(e) => setNewClass({...newClass, section: e.target.value})}
+                    placeholder="e.g., A"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Academic Year</label>
+                  <input 
+                    type="text" 
+                    value={newClass.academicYear}
+                    onChange={(e) => setNewClass({...newClass, academicYear: e.target.value})}
+                    placeholder="2024"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea 
+                  rows="3"
+                  value={newClass.description}
+                  onChange={(e) => setNewClass({...newClass, description: e.target.value})}
+                  placeholder="Class description..."
+                />
+              </div>
+              <div className="class-code-preview">
+                <strong>Class Code:</strong> 
+                <code>{newClass.classCode}</code>
+                <small>Students will use this code to join</small>
+              </div>
+              <button type="submit" className="btn-submit">Create Class</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add User Modal */}
       {showAddUser && (
         <div className="modal">
@@ -702,6 +705,19 @@ function AdminDashboard({ onLogout }) {
                 </select>
               </div>
               <div className="form-group">
+                <label>Select Class</label>
+                <select 
+                  value={newAssessment.classId}
+                  onChange={(e) => setNewAssessment({...newAssessment, classId: e.target.value})}
+                  required
+                >
+                  <option value="">-- Select Class --</option>
+                  {classes.map(cls => (
+                    <option key={cls.id} value={cls.id}>{cls.className} ({cls.classCode})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Questions (one per line)</label>
                 <textarea 
                   rows="5"
@@ -762,55 +778,35 @@ function AdminDashboard({ onLogout }) {
           <a 
             href="#" 
             className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('dashboard') }}
+            onClick={(e) => { e.preventDefault(); setActiveTab('dashboard'); loadData(); }}
           >
             <i className="fas fa-home"></i> Dashboard
           </a>
           <a 
             href="#" 
-            className={activeTab === 'pending-admins' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('pending-admins') }}
+            className={activeTab === 'classes' ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); setActiveTab('classes'); loadData(); }}
           >
-            <i className="fas fa-user-clock"></i> Pending Admins
+            <i className="fas fa-school"></i> Classes
+            {classes.length > 0 && <span className="nav-badge">{classes.length}</span>}
+          </a>
+          <a 
+            href="#" 
+            className={activeTab === 'pending-admins' ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); setActiveTab('pending-admins'); loadData(); }}
+          >
+            <i className="fas fa-user-clock"></i> Pending
             {pendingAdmins.length > 0 && <span className="nav-badge">{pendingAdmins.length}</span>}
           </a>
           <a 
             href="#" 
             className={activeTab === 'users' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('users') }}
+            onClick={(e) => { e.preventDefault(); setActiveTab('users'); loadData(); }}
           >
             <i className="fas fa-users"></i> Students
           </a>
-          <a 
-            href="#" 
-            className={activeTab === 'manage-tests' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('manage-tests') }}
-          >
-            <i className="fas fa-clipboard-list"></i> Assessments
-          </a>
-          <a 
-            href="#" 
-            className={activeTab === 'support' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('support') }}
-          >
-            <i className="fas fa-headset"></i> Support
-            {supportTickets.filter(t => t.status === 'open').length > 0 && 
-              <span className="nav-badge">{supportTickets.filter(t => t.status === 'open').length}</span>
-            }
-          </a>
-          <a 
-            href="#" 
-            className={activeTab === 'reports' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setActiveTab('reports') }}
-          >
-            <i className="fas fa-chart-bar"></i> Reports
-          </a>
         </div>
         <div className="nav-right">
-          <div className="notification-badge">
-            <i className="fas fa-bell"></i>
-            <span className="badge">{pendingAdmins.length + supportTickets.filter(t => t.status === 'open').length}</span>
-          </div>
           <div className="profile-mini">
             <img src="https://ui-avatars.com/api/?name=Admin&background=6366f1&color=fff" alt="Admin" />
           </div>
