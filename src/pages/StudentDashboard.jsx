@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import './Dashboard.css'
+import Navbar from '../components/common/Navbar'
+import StatCard from '../components/common/StatCard'
+import ActionCard from '../components/common/ActionCard'
+import Modal from '../components/common/Modal'
+import ClassCard from '../components/student/ClassCard'
+import CareerCard from '../components/student/CareerCard'
 
 function StudentDashboard({ onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard')
