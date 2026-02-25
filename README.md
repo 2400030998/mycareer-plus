@@ -1,16 +1,27 @@
-# React + Vite
+MyCareer+ – Web-Based Career Assessment Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+MyCareer+ is a web-based career assessment application developed as part of the Full Stack Application Development (FSAD) course.  
+The application helps students understand their skills, interests, and strengths through a structured assessment process and provides career guidance.
 
-Currently, two official plugins are available:
+The frontend application is deployed and publicly accessible at:
+https://mycareer-plus.vercel.app/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Project Overview
 
-## React Compiler
+Many students face difficulty in choosing the right career path due to a lack of proper awareness about their abilities and interests.  
+MyCareer+ addresses this problem by offering a simple, interactive, and user-friendly platform for career assessment.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This repository currently contains the frontend implementation of the project.
+Live Deployment
 
-## Expanding the ESLint configuration
+Future Enhancements
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Backend integration using Spring Boot
+- Database management with MySQL  
+- Advanced career recommendation logic  
+- Role-based access and analytics  
+
+ Conclusion
+
+MyCareer+ serves as a foundation for a smart career assessment system.  
+The current phase focuses on frontend development and user experience, with full stack integration planned for future phases.
